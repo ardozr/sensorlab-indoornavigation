@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>KozminGo · Sensor Lab</title>
+<style>
+  :root{
+    --navy:#0A0F26; --navy2:#101736; --panel:#141C3F; --line:#26305C;
+    --gold:#C9A557; --gold2:#E4C989; --ink:#F4F6FF; --sub:#8E9AC4;
+    --green:#4ADE80; --red:#F87171; --amber:#FBBF24; --trace:#7DD3FC; --trace2:#F0ABFC;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--navy); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    display:flex;flex-direction:column;min-height:100dvh;
+    padding:max(10px,env(safe-area-inset-top)) 14px max(14px,env(safe-area-inset-bottom));
+    user-select:none;-webkit-user-select:none;
+  }
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+  /* top bar */
+  .bar{display:flex;align-items:center;justify-content:space-between;padding:6px 2px 12px}
+  .brand{font-weight:800;letter-spacing:.06em;font-size:15px}
+  .brand b{color:var(--gold)}
+  .brand small{display:block;font-weight:600;color:var(--sub);letter-spacing:.22em;font-size:8.5px;margin-top:2px}
+  .stats{display:flex;gap:10px}
+  .st{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--sub);letter-spacing:.08em}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--line)}
+  .dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+  .dot.warn{background:var(--amber)}
+  /* instruction card */
+  .card{
+    background:linear-gradient(180deg,var(--navy2),var(--panel));
+    border:1px solid var(--line);border-radius:6px;
+    padding:18px 16px 16px;text-align:center;position:relative;overflow:hidden;
+  }
+  .card.flash::after{
+    content:'';position:absolute;inset:0;background:var(--gold);opacity:0;
+    animation:fl .45s ease-out;pointer-events:none;
+  }
+  @keyframes fl{0%{opacity:.4}100%{opacity:0}}
+  @media (prefers-reduced-motion:reduce){ .card.flash::after{animation:none} }
+  .eyebrow{font-size:10.5px;letter-spacing:.28em;color:var(--gold);font-weight:700;margin-bottom:10px}
+  .instr{font-size:30px;line-height:1.15;font-weight:800;min-height:2.3em;display:flex;align-items:center;justify-content:center}
+  .tip{font-size:12.5px;color:var(--sub);margin-top:8px;min-height:1.2em}
+  .count{font-size:64px;font-weight:800;color:var(--gold2);line-height:1;margin-top:10px}
+  .count small{font-size:16px;color:var(--sub);font-weight:600;margin-left:4px}
+  .rail{height:4px;background:var(--line);border-radius:2px;margin-top:16px;overflow:hidden}
+  .rail i{display:block;height:100%;background:var(--gold);width:0%}
+  /* chart */
+  .chartWrap{margin-top:12px;border:1px solid var(--line);border-radius:6px;background:var(--navy2);padding:8px}
+  .chartHead{display:flex;justify-content:space-between;align-items:center;padding:0 4px 6px;font-size:10px;color:var(--sub);letter-spacing:.1em}
+  .legend{display:flex;gap:12px}
+  .legend span::before{content:'';display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:5px;background:var(--trace)}
+  .legend span:last-child::before{background:var(--trace2)}
+  canvas{width:100%;height:110px;display:block}
+  /* counters */
+  .meters{display:flex;justify-content:space-between;margin-top:10px;font-size:11px;color:var(--sub)}
+  .meters b{color:var(--ink);font-weight:700}
+  /* controls */
+  .grow{flex:1}
+  .ctl{display:flex;gap:10px;margin-top:14px}
+  button{
+    flex:1;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    border-radius:6px;padding:15px 8px;font-size:14px;font-weight:700;letter-spacing:.04em;
+    font-family:inherit;cursor:pointer;
+  }
+  button:active{transform:translateY(1px)}
+  button:disabled{opacity:.35;pointer-events:none}
+  button.primary{background:var(--gold);border-color:var(--gold);color:#12172E}
+  button.danger{border-color:#5A2A38;color:var(--red)}
+  button.small{flex:0 0 auto;padding:15px 14px;font-size:12.5px}
+  .note{margin-top:12px}
+  .note input{
+    width:100%;background:var(--navy2);border:1px solid var(--line);border-radius:6px;
+    color:var(--ink);padding:11px 12px;font-size:13px;font-family:inherit;
+  }
+  .note input::placeholder{color:var(--sub)}
+  .hint{font-size:11px;color:var(--sub);text-align:center;margin-top:10px;line-height:1.5}
+  .hidden{display:none !important}
+  /* done panel */
+  .doneBox{border:1px solid var(--gold);border-radius:6px;background:var(--panel);padding:16px;margin-top:12px;text-align:center}
+  .doneBox h3{color:var(--gold2);font-size:15px;letter-spacing:.06em;margin-bottom:6px}
+  .doneBox p{font-size:12px;color:var(--sub);line-height:1.5}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="brand">KOZMIN<b>GO</b><small>SENSOR&nbsp;LAB</small></div>
+  <div class="stats">
+    <div class="st"><span class="dot" id="dMotion"></span>MOTION</div>
+    <div class="st"><span class="dot" id="dOrient"></span>COMPASS</div>
+    <div class="st"><span class="dot" id="dWake"></span>WAKE</div>
+  </div>
+</div>
+
+<div class="card" id="card">
+  <div class="eyebrow" id="phaseTag">HAZIR</div>
+  <div class="instr" id="instr">Kayda başlamak için hazır ol</div>
+  <div class="tip" id="tipTxt">Protokol ~2,5 dakika sürer. Sesini aç, titreşimi hisset.</div>
+  <div class="count mono" id="countTxt">—</div>
+  <div class="rail"><i id="railFill"></i></div>
+</div>
+
+<div class="chartWrap">
+  <div class="chartHead">
+    <span class="mono" id="clock">00:00.0</span>
+    <div class="legend"><span>|a| ivme</span><span>jiroskop</span></div>
+  </div>
+  <canvas id="chart"></canvas>
+</div>
+
+<div class="meters mono">
+  <span>motion <b id="mCnt">0</b></span>
+  <span>compass <b id="oCnt">0</b></span>
+  <span>hz <b id="hzTxt">–</b></span>
+  <span>faz <b id="phCnt">0/0</b></span>
+</div>
+
+<div class="grow"></div>
+
+<div class="doneBox hidden" id="doneBox">
+  <h3>Kayıt tamamlandı</h3>
+  <p id="doneInfo">—</p>
+</div>
+
+<div class="note" id="noteRow">
+  <input id="noteInp" placeholder="Cihaz / koşul notu (örn. iPhone 15 · elde · koridor)">
+</div>
+
+<div class="ctl" id="ctlIdle">
+  <button class="primary" id="startBtn">Kaydı başlat</button>
+</div>
+<div class="ctl hidden" id="ctlRun">
+  <button class="small" id="redoBtn">↺ Fazı tekrarla</button>
+  <button class="small" id="skipBtn">Fazı atla ›</button>
+  <button class="danger" id="stopBtn">Bitir</button>
+</div>
+<div class="ctl hidden" id="ctlDone">
+  <button class="primary" id="exportBtn">JSON indir</button>
+  <button class="small" id="copyBtn">Kopyala</button>
+  <button class="small" id="againBtn">Yeni kayıt</button>
+</div>
+
+<div class="hint" id="hintTxt">Yönergeleri okunan anda uygula — faz geçişinde titreşim + bip gelir.<br>En az 2-3 kayıt al: elde, cepte, farklı hızlarda.</div>
+
+<script>
+/* ================= KozminGo Sensor Lab =================
+   Guided motion-sensor recorder. Output: timestamped, phase-labelled
+   accelerometer + gyroscope + compass data for step-detection tuning. */
+const $=id=>document.getElementById(id);
+
+/* ---------- protocol ---------- */
+const PROTO=[
+  {id:'prep',        dur:4,  instr:'Hazırlan',                          tip:'Telefonu normalde tuttuğun gibi tut'},
+  {id:'still_base',  dur:6,  instr:'DUR — sabit tut',                   tip:'Gürültü tabanı ölçülüyor'},
+  {id:'steps_3',     dur:8,  instr:'Tam 3 adım at, sonra dur',          tip:'Ne eksik ne fazla — bu altın veri', steps:3},
+  {id:'still_2',     dur:4,  instr:'DUR',                               tip:''},
+  {id:'steps_5',     dur:10, instr:'Tam 5 adım at, sonra dur',          tip:'Sayarak at', steps:5},
+  {id:'still_3',     dur:4,  instr:'DUR',                               tip:''},
+  {id:'walk_normal', dur:12, instr:'Normal tempoda yürü',               tip:'Her zamanki yürüyüşün'},
+  {id:'still_4',     dur:4,  instr:'DUR',                               tip:''},
+  {id:'walk_slow',   dur:10, instr:'YAVAŞ yürü',                        tip:'Ağır, sakin adımlar'},
+  {id:'still_5',     dur:4,  instr:'DUR',                               tip:''},
+  {id:'walk_fast',   dur:10, instr:'HIZLI yürü',                        tip:'Acele eden öğrenci gibi'},
+  {id:'still_6',     dur:4,  instr:'DUR',                               tip:''},
+  {id:'pocket_walk', dur:14, instr:'Telefonu CEBİNE koy ve yürü',       tip:'Bip duyunca çıkaracaksın'},
+  {id:'pocket_out',  dur:5,  instr:'Telefonu çıkar — DUR',              tip:''},
+  {id:'handle',      dur:8,  instr:'Telefonu elinde evir çevir',        tip:'YÜRÜME — sadece elle oyna'},
+  {id:'shake',       dur:5,  instr:'Telefonu SALLA',                    tip:'Rastgele, sert'},
+  {id:'rotate',      dur:8,  instr:'Olduğun yerde 360° dön',            tip:'Telefon önünde, kendin dön'},
+  {id:'free_walk',   dur:15, instr:'Serbest yürü — dönüşler yap',       tip:'Koridor köşeleri, U dönüşleri'},
+];
+
+/* ---------- state ---------- */
+let running=false, t0=0, phIdx=-1, phStart=0, raf=0, wakeLock=null;
+let rec=null, lastHz=[], flashT=0;
+const now=()=>performance.now();
+
+function freshRec(){
+  return {
+    meta:{tool:'KozminGo Sensor Lab', v:1, startedAt:new Date().toISOString(),
+          ua:navigator.userAgent,
+          screen:{w:screen.width,h:screen.height,dpr:devicePixelRatio||1},
+          note:$('noteInp').value||''},
+    phases:[],
+    motion:{t:[],ax:[],ay:[],az:[],rx:[],ry:[],rz:[],iv:[]},
+    orient:{t:[],h:[],src:[]}
+  };
+}
+const r3=v=>v==null?null:Math.round(v*1000)/1000;
+
+/* ---------- sensors ---------- */
+let motionSeen=false, orientSeen=false;
+function onMotion(e){
+  const a=e.accelerationIncludingGravity; if(!a||a.x==null) return;
+  motionSeen=true; $('dMotion').classList.add('on');
+  if(!running) return;
+  const t=now()-t0, r=e.rotationRate||{};
+  const M=rec.motion;
+  M.t.push(Math.round(t)); M.ax.push(r3(a.x)); M.ay.push(r3(a.y)); M.az.push(r3(a.z));
+  M.rx.push(r3(r.alpha)); M.ry.push(r3(r.beta)); M.rz.push(r3(r.gamma));
+  M.iv.push(e.interval?r3(e.interval):null);
+  lastHz.push(t); while(lastHz.length&&lastHz[0]<t-1000) lastHz.shift();
+  pushTrace(t, Math.hypot(a.x,a.y,a.z), Math.hypot(r.alpha||0,r.beta||0,r.gamma||0));
+}
+function onOrient(e){
+  let h=null, src='';
+  if(e.webkitCompassHeading!=null&&!isNaN(e.webkitCompassHeading)){ h=e.webkitCompassHeading; src='ios'; }
+  else if(e.alpha!=null){ h=360-e.alpha; src=e.absolute?'abs':'rel'; }
+  if(h==null) return;
+  orientSeen=true; $('dOrient').classList.add('on');
+  if(!running) return;
+  const O=rec.orient;
+  O.t.push(Math.round(now()-t0)); O.h.push(Math.round(h*10)/10); O.src.push(src);
+}
+async function armSensors(){
+  try{
+    if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){
+      if(await DeviceMotionEvent.requestPermission()!=='granted') throw 0;
+    }
+    if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
+      try{ await DeviceOrientationEvent.requestPermission(); }catch(_){}
+    }
+  }catch(_){
+    $('instr').textContent='Sensör izni reddedildi';
+    $('tipTxt').textContent='Ayarlar → Safari → Hareket ve Yön erişimine izin ver, sayfayı yenile.';
+    return false;
+  }
+  window.addEventListener('devicemotion',onMotion,true);
+  window.addEventListener('deviceorientation',onOrient,true);
+  window.addEventListener('deviceorientationabsolute',onOrient,true);
+  try{ wakeLock=await navigator.wakeLock.request('screen'); $('dWake').classList.add('on'); }
+  catch(_){ $('dWake').classList.add('warn'); }
+  return true;
+}
+
+/* ---------- cues ---------- */
+let actx=null;
+function beep(n=1){
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    for(let i=0;i<n;i++){
+      const o=actx.createOscillator(), g=actx.createGain();
+      o.frequency.value=n>1&&i===n-1?1175:880;
+      o.connect(g); g.connect(actx.destination);
+      const t=actx.currentTime+i*0.18;
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.25,t+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.13);
+      o.start(t); o.stop(t+0.15);
+    }
+  }catch(_){}
+}
+function buzz(p){ try{ navigator.vibrate&&navigator.vibrate(p); }catch(_){} }
+function flash(){ const c=$('card'); c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); }
+
+/* ---------- phase engine ---------- */
+function enterPhase(i){
+  // close previous
+  if(phIdx>=0&&rec.phases.length){
+    const P=rec.phases[rec.phases.length-1];
+    if(P.t1==null) P.t1=Math.round(now()-t0);
+  }
+  phIdx=i;
+  if(i>=PROTO.length){ finish(); return; }
+  const ph=PROTO[i];
+  phStart=now();
+  rec.phases.push({id:ph.id,label:ph.instr,t0:Math.round(now()-t0),t1:null,
+                   ...(ph.steps?{targetSteps:ph.steps}:{})});
+  $('phaseTag').textContent='FAZ '+(i+1)+' / '+PROTO.length+' · '+ph.id.toUpperCase();
+  $('instr').textContent=ph.instr;
+  $('tipTxt').textContent=ph.tip||'';
+  $('phCnt').textContent=(i+1)+'/'+PROTO.length;
+  flash(); beep(1); buzz([80]);
+}
+function finish(){
+  running=false;
+  if(rec.phases.length){ const P=rec.phases[rec.phases.length-1]; if(P.t1==null) P.t1=Math.round(now()-t0); }
+  cancelAnimationFrame(raf);
+  beep(2); buzz([80,70,80]);
+  $('phaseTag').textContent='TAMAMLANDI';
+  $('instr').textContent='Kayıt bitti 🎉';
+  $('tipTxt').textContent='Dosyayı indirip Claude ile paylaş.';
+  $('countTxt').textContent='—';
+  $('railFill').style.width='100%';
+  $('ctlRun').classList.add('hidden');
+  $('ctlDone').classList.remove('hidden');
+  $('doneBox').classList.remove('hidden');
+  const secs=((now()-t0)/1000).toFixed(1);
+  $('doneInfo').textContent=rec.motion.t.length+' motion · '+rec.orient.t.length+' compass örneği · '+secs+' sn · '+rec.phases.length+' faz';
+  if(wakeLock){ try{ wakeLock.release(); }catch(_){} wakeLock=null; $('dWake').classList.remove('on'); }
+}
+
+/* ---------- main loop ---------- */
+function loop(){
+  if(!running) return;
+  const t=now()-t0;
+  const s=t/1000;
+  $('clock').textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(Math.floor(s%60)).padStart(2,'0')+'.'+Math.floor((s%1)*10);
+  $('mCnt').textContent=rec.motion.t.length;
+  $('oCnt').textContent=rec.orient.t.length;
+  $('hzTxt').textContent=lastHz.length||'–';
+  const ph=PROTO[phIdx];
+  if(ph){
+    const el=(now()-phStart)/1000, rem=Math.max(0,ph.dur-el);
+    $('countTxt').innerHTML=Math.ceil(rem)+'<small>sn</small>';
+    $('railFill').style.width=Math.min(100,(el/ph.dur)*100)+'%';
+    if(el>=ph.dur) enterPhase(phIdx+1);
+  }
+  drawChart(t);
+  raf=requestAnimationFrame(loop);
+}
+
+/* ---------- live seismograph ---------- */
+const cv=$('chart'), cx=cv.getContext('2d');
+let trace=[];   // {t, a, g}
+function pushTrace(t,a,g){ trace.push({t,a,g}); while(trace.length&&trace[0].t<t-5000) trace.shift(); }
+function sizeCanvas(){
+  const r=cv.getBoundingClientRect(), d=devicePixelRatio||1;
+  cv.width=r.width*d; cv.height=110*d; cx.setTransform(d,0,0,d,0,0);
+}
+window.addEventListener('resize',sizeCanvas);
+function drawChart(tNow){
+  const W=cv.getBoundingClientRect().width, H=110;
+  cx.clearRect(0,0,W,H);
+  if(!trace.length){
+    cx.fillStyle='rgba(142,154,196,.5)'; cx.font='10px ui-monospace,monospace';
+    cx.fillText(running?'sensör verisi bekleniyor…':'kayıt başlayınca canlı iz burada akar',10,H/2);
+    return;
+  }
+  const tL=tNow-5000;
+  cx.strokeStyle='rgba(38,48,92,.9)'; cx.beginPath(); cx.moveTo(0,H*0.55); cx.lineTo(W,H*0.55); cx.stroke();
+  // accel |a| : map 4..16 m/s² onto lower band
+  cx.strokeStyle='#7DD3FC'; cx.lineWidth=1.4; cx.beginPath();
+  trace.forEach((p,i)=>{
+    const x=((p.t-tL)/5000)*W, y=H*0.55-Math.min(H*0.5,Math.max(-H*0.4,(p.a-9.81)*6));
+    i?cx.lineTo(x,y):cx.moveTo(x,y);
+  });
+  cx.stroke();
+  // gyro magnitude on top band
+  cx.strokeStyle='#F0ABFC'; cx.lineWidth=1; cx.beginPath();
+  trace.forEach((p,i)=>{
+    const x=((p.t-tL)/5000)*W, y=H-6-Math.min(H*0.35,p.g*0.09);
+    i?cx.lineTo(x,y):cx.moveTo(x,y);
+  });
+  cx.stroke();
+  cx.lineWidth=1;
+}
+
+/* ---------- export ---------- */
+function fileName(){
+  const d=new Date(), p=n=>String(n).padStart(2,'0');
+  return 'kozmingo-sensorlab-'+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'-'+p(d.getHours())+p(d.getMinutes())+'.json';
+}
+$('exportBtn').addEventListener('click',()=>{
+  rec.meta.note=$('noteInp').value||'';
+  const blob=new Blob([JSON.stringify(rec)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=fileName();
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  $('doneInfo').textContent='İndirildi: '+fileName()+' ('+Math.round(blob.size/1024)+' KB)';
+});
+$('copyBtn').addEventListener('click',async ()=>{
+  rec.meta.note=$('noteInp').value||'';
+  try{ await navigator.clipboard.writeText(JSON.stringify(rec)); $('doneInfo').textContent='Panoya kopyalandı ✓'; }
+  catch(_){ $('doneInfo').textContent='Kopyalama engellendi — JSON indir tuşunu kullan.'; }
+});
+
+/* ---------- controls ---------- */
+$('startBtn').addEventListener('click',async ()=>{
+  if(!(await armSensors())) return;
+  rec=freshRec(); trace=[]; lastHz=[];
+  running=true; t0=now(); phIdx=-1;
+  sizeCanvas();
+  $('ctlIdle').classList.add('hidden');
+  $('ctlRun').classList.remove('hidden');
+  $('ctlDone').classList.add('hidden');
+  $('doneBox').classList.add('hidden');
+  $('hintTxt').classList.add('hidden');
+  $('noteRow').classList.add('hidden');
+  enterPhase(0);
+  loop();
+});
+$('skipBtn').addEventListener('click',()=>{ if(running) enterPhase(phIdx+1); });
+$('redoBtn').addEventListener('click',()=>{
+  if(!running) return;
+  if(rec.phases.length){ const P=rec.phases[rec.phases.length-1]; P.t1=Math.round(now()-t0); P.redo=true; }
+  phIdx--; enterPhase(phIdx+1);
+});
+$('stopBtn').addEventListener('click',finish);
+$('againBtn').addEventListener('click',()=>{
+  $('ctlDone').classList.add('hidden');
+  $('ctlIdle').classList.remove('hidden');
+  $('doneBox').classList.add('hidden');
+  $('hintTxt').classList.remove('hidden');
+  $('noteRow').classList.remove('hidden');
+  $('phaseTag').textContent='HAZIR';
+  $('instr').textContent='Kayda başlamak için hazır ol';
+  $('tipTxt').textContent='Protokol ~2,5 dakika sürer. Sesini aç, titreşimi hisset.';
+  $('countTxt').textContent='—'; $('railFill').style.width='0%';
+  trace=[]; drawChart(0);
+});
+try{ $('noteInp').value=localStorage.getItem('kg_lab_note')||''; }catch(_){}
+$('noteInp').addEventListener('change',()=>{ try{ localStorage.setItem('kg_lab_note',$('noteInp').value); }catch(_){} });
+sizeCanvas(); drawChart(0);
+</script>
+</body>
+</html>
